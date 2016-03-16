@@ -22,20 +22,20 @@
     </properties>
 
     <ciManagement>
-        <system>travis-ci</system>
-        <url>https://travis-ci.org/danielflower/multi-module-maven-release-plugin</url>
+        <system>Jenkins (DukeCon)</system>
+        <url>https://dev.dukecon.org/jenkins/job/multi-module-maven-release-plugin/</url>
     </ciManagement>
 
     <scm>
-        <url>https://github.com/danielflower/multi-module-maven-release-plugin</url>
-        <connection>scm:git:git@github.com:danielflower/multi-module-maven-release-plugin.git</connection>
+        <url>https://github.com/dukecon/multi-module-maven-release-plugin</url>
+        <connection>scm:git:git@github.com:dukecon/multi-module-maven-release-plugin.git</connection>
     </scm>
 
     <inceptionYear>2015</inceptionYear>
 
     <issueManagement>
         <system>GitHub</system>
-        <url>https://github.com/danielflower/multi-module-maven-release-plugin/issues</url>
+        <url>https://github.com/dukecon/multi-module-maven-release-plugin/issues</url>
     </issueManagement>
 
     <licenses>
@@ -331,12 +331,14 @@
 
     <distributionManagement>
         <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+            <id>dukecon-snapshots</id>
+            <name>DukeCon Snapshots</name>
+            <url>http://dev.dukecon.org/nexus/content/repositories/snapshots</url>
         </snapshotRepository>
         <repository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+            <id>dukecon-releases</id>
+            <name>DukeCon Releases</name>
+            <url>http://dev.dukecon.org/nexus/content/repositories/releases</url>
         </repository>
     </distributionManagement>
 
