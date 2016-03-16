@@ -1,5 +1,8 @@
 package com.github.danielflower.mavenplugins.release;
 
+import org.apache.maven.artifact.factory.ArtifactFactory;
+import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
+import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.model.Scm;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -20,6 +23,8 @@ import java.util.List;
 import static java.util.Arrays.asList;
 import org.eclipse.jgit.transport.JschConfigSessionFactory;
 
+import javax.inject.Inject;
+
 /**
  * Releases the project.
  */
@@ -35,6 +40,18 @@ public class ReleaseMojo extends AbstractMojo {
     /**
      * The Maven Project.
      */
+    @Inject
+    private ArtifactFactory artifactFactory;
+
+    @Inject
+    private ArtifactMetadataSource artifactMetadataSource;
+
+    @Parameter(property="localRepository", required = true, readonly = true)
+    private ArtifactRepository localRepository;
+
+    @Parameter(property="project.remoteArtifactRepositories", required = true, readonly = true)
+    private List<ArtifactRepository> remoteArtifactRepositories;
+
     @Parameter(property = "project", required = true, readonly = true, defaultValue = "${project}")
     private MavenProject project;
 
@@ -116,9 +133,14 @@ public class ReleaseMojo extends AbstractMojo {
     @Parameter(property = "disableSshAgent")
     private boolean disableSshAgent;
 
+    @Parameter(property = "resolveSnapshots")
+    private List<String> resolveSnapshots;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         Log log = getLog();
+
+        log.info ("Resolving snapshots: " + resolveSnapshots);
 
         try {
             configureJsch(log);
@@ -197,8 +219,8 @@ public class ReleaseMojo extends AbstractMojo {
         }
     }
 
-    private static List<File> updatePomsAndReturnChangedFiles(Log log, LocalGitRepo repo, Reactor reactor) throws MojoExecutionException, ValidationException {
-        PomUpdater pomUpdater = new PomUpdater(log, reactor);
+    private List<File> updatePomsAndReturnChangedFiles(Log log, LocalGitRepo repo, Reactor reactor) throws MojoExecutionException, ValidationException {
+        PomUpdater pomUpdater = new PomUpdater(log, reactor, artifactFactory, artifactMetadataSource, localRepository, remoteArtifactRepositories, resolveSnapshots);
         PomUpdater.UpdateResult result = pomUpdater.updateVersion();
         if (!result.success()) {
             log.info("Going to revert changes because there was an error.");
@@ -276,7 +298,8 @@ public class ReleaseMojo extends AbstractMojo {
         request.setInteractive(false);
 
         if (goals == null) {
-            goals = asList("deploy");
+            goals = new ArrayList<String>();
+            goals.add("deploy");
         }
         if (skipTests) {
             goals.add("-DskipTests=true");

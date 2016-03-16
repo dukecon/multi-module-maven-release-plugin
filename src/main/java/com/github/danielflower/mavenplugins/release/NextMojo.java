@@ -30,6 +30,8 @@ import static java.util.Arrays.asList;
     requiresProject = true, // this can only run against a maven project
     aggregator = true // the plugin should only run once against the aggregator pom
 )
+// TODO: Need to extend this for consumed snapshot resolve forecasts!
+// The 'next' goal should also show which versions were used in case of a release build.
 public class NextMojo extends AbstractMojo {
 
     /**
