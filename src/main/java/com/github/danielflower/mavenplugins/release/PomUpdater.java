@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import org.codehaus.plexus.util.WriterFactory;
@@ -164,7 +165,7 @@ public class PomUpdater {
                 log.error("Could not retrieve versions for artifact: " + artifact);
                 return null;
             }
-            versions.sort(new Comparator<ArtifactVersion>() {
+            Collections.sort(versions, new Comparator<ArtifactVersion>() {
                 @Override
                 public int compare(ArtifactVersion o1, ArtifactVersion o2) {
                     return o1.compareTo(o2);
