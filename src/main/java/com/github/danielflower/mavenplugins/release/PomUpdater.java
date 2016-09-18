@@ -21,6 +21,7 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import org.codehaus.plexus.util.WriterFactory;
 
 public class PomUpdater {
 
@@ -60,7 +61,7 @@ public class PomUpdater {
 
                 File pom = project.getFile().getCanonicalFile();
                 changedPoms.add(pom);
-                Writer fileWriter = new FileWriter(pom);
+                Writer fileWriter = WriterFactory.newXmlWriter(pom);
 
                 Model originalModel = project.getOriginalModel();
                 try {

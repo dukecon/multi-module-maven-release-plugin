@@ -4,14 +4,11 @@ import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.metadata.ArtifactMetadataSource;
 import org.apache.maven.artifact.repository.ArtifactRepository;
 import org.apache.maven.model.Scm;
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.project.MavenProject;
-import org.apache.maven.shared.invoker.*;
 import org.eclipse.jgit.api.errors.GitAPIException;
 
 import java.io.File;
@@ -21,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Arrays.asList;
-import org.eclipse.jgit.transport.JschConfigSessionFactory;
 
 import javax.inject.Inject;
 
@@ -35,11 +31,8 @@ import javax.inject.Inject;
     requiresProject = true, // this can only run against a maven project
     aggregator = true // the plugin should only run once against the aggregator pom
 )
-public class ReleaseMojo extends AbstractMojo {
+public class ReleaseMojo extends BaseMojo {
 
-    /**
-     * The Maven Project.
-     */
     @Inject
     private ArtifactFactory artifactFactory;
 
@@ -51,28 +44,6 @@ public class ReleaseMojo extends AbstractMojo {
 
     @Parameter(property="project.remoteArtifactRepositories", required = true, readonly = true)
     private List<ArtifactRepository> remoteArtifactRepositories;
-
-    @Parameter(property = "project", required = true, readonly = true, defaultValue = "${project}")
-    private MavenProject project;
-
-    @Parameter(property = "projects", required = true, readonly = true, defaultValue = "${reactorProjects}")
-    private List<MavenProject> projects;
-
-    /**
-     * <p>
-     * The build number to use in the release version. Given a snapshot version of "1.0-SNAPSHOT"
-     * and a buildNumber value of "2", the actual released version will be "1.0.2".
-     * </p>
-     * <p>
-     * By default, the plugin will automatically find a suitable build number. It will start at version
-     * 0 and increment this with each release.
-     * </p>
-     * <p>
-     * This can be specified using a command line parameter ("-DbuildNumber=2") or in this plugin's configuration.
-     * </p>
-     */
-    @Parameter(property = "buildNumber")
-    private Long buildNumber;
 
     /**
      * <p>
@@ -115,23 +86,27 @@ public class ReleaseMojo extends AbstractMojo {
      */
     @Parameter(alias = "skipTests", defaultValue = "false", property = "skipTests")
     private boolean skipTests;
+    
+	/**
+	 * Specifies a custom, user specific Maven settings file to be used during
+	 * the release build.
+	 */
+	@Parameter(alias = "userSettings")
+	private File userSettings;
 
+	/**
+	 * Specifies a custom, global Maven settings file to be used during the
+	 * release build.
+	 */
+	@Parameter(alias = "globalSettings")
+	private File globalSettings;
+        
     /**
-     * The modules to release, or no  value to to release the project from the root pom, which is the default.
-     * The selected module plus any other modules it needs will be built and released also.
-     * When run from the command line, this can be a comma-separated list of module names.
+     * Push tags to remote repository as they are created.
      */
-    @Parameter(alias = "modulesToRelease", property = "modulesToRelease")
-    private List<String> modulesToRelease;
-
-    /**
-     * A module to force release on, even if no changes has been detected.
-     */
-    @Parameter(alias = "forceRelease", property = "forceRelease")
-    private List<String> modulesToForceRelease;
-
-    @Parameter(property = "disableSshAgent")
-    private boolean disableSshAgent;
+    @Parameter(alias = "pushTags", defaultValue="true", property="push")
+    private boolean pushTags;
+    
 
     @Parameter(property = "resolveSnapshots")
     private List<String> resolveSnapshots;
@@ -145,7 +120,8 @@ public class ReleaseMojo extends AbstractMojo {
         try {
             configureJsch(log);
 
-            LocalGitRepo repo = LocalGitRepo.fromCurrentDir(getRemoteUrlOrNullIfNoneSet(project.getScm()));
+
+            LocalGitRepo repo = LocalGitRepo.fromCurrentDir(getRemoteUrlOrNullIfNoneSet(project.getOriginalModel().getScm()));
             repo.errorIfNotClean();
 
             Reactor reactor = Reactor.fromProjects(log, repo, project, projects, buildNumber, modulesToForceRelease);
@@ -160,7 +136,14 @@ public class ReleaseMojo extends AbstractMojo {
             tagAndPushRepo(log, repo, proposedTags);
 
             try {
-                runMavenBuild(reactor);
+            	final ReleaseInvoker invoker = new ReleaseInvoker(getLog(), project);
+            	invoker.setGlobalSettings(globalSettings);
+            	invoker.setUserSettings(userSettings);
+            	invoker.setGoals(goals);
+            	invoker.setModulesToRelease(modulesToRelease);
+            	invoker.setReleaseProfiles(releaseProfiles);
+            	invoker.setSkipTests(skipTests);
+                invoker.runMavenBuild(reactor);
                 revertChanges(log, repo, changedFiles, true); // throw if you can't revert as that is the root problem
             } finally {
                 revertChanges(log, repo, changedFiles, false); // warn if you can't revert but keep throwing the original exception so the root cause isn't lost
@@ -181,20 +164,18 @@ public class ReleaseMojo extends AbstractMojo {
         }
     }
 
-    private void configureJsch(Log log) {
-        if(!disableSshAgent) {
-            JschConfigSessionFactory.setInstance(new SshAgentSessionFactory(log));
-        }
-    }
-
     private void tagAndPushRepo(Log log, LocalGitRepo repo, List<AnnotatedTag> proposedTags) throws GitAPIException {
         for (AnnotatedTag proposedTag : proposedTags) {
             log.info("About to tag the repository with " + proposedTag.name());
-            repo.tagRepoAndPush(proposedTag);
+            if (pushTags) {
+                repo.tagRepoAndPush(proposedTag);
+            } else {
+                repo.tagRepo(proposedTag);
+            }
         }
     }
 
-    private static String getRemoteUrlOrNullIfNoneSet(Scm scm) throws ValidationException {
+    static String getRemoteUrlOrNullIfNoneSet(Scm scm) throws ValidationException {
         if (scm == null) {
             return null;
         }
@@ -241,7 +222,7 @@ public class ReleaseMojo extends AbstractMojo {
         return result.alteredPoms;
     }
 
-    private static List<AnnotatedTag> figureOutTagNamesAndThrowIfAlreadyExists(List<ReleasableModule> modules, LocalGitRepo git, List<String> modulesToRelease) throws GitAPIException, ValidationException {
+    static List<AnnotatedTag> figureOutTagNamesAndThrowIfAlreadyExists(List<ReleasableModule> modules, LocalGitRepo git, List<String> modulesToRelease) throws GitAPIException, ValidationException {
         List<AnnotatedTag> tags = new ArrayList<AnnotatedTag>();
         for (ReleasableModule module : modules) {
             if (!module.willBeReleased()) {
@@ -274,80 +255,6 @@ public class ReleaseMojo extends AbstractMojo {
             throw new ValidationException(summary, messages);
         }
         return tags;
-    }
-
-    private static void printBigErrorMessageAndThrow(Log log, String terseMessage, List<String> linesToLog) throws MojoExecutionException {
-        log.error("");
-        log.error("");
-        log.error("");
-        log.error("************************************");
-        log.error("Could not execute the release plugin");
-        log.error("************************************");
-        log.error("");
-        log.error("");
-        for (String line : linesToLog) {
-            log.error(line);
-        }
-        log.error("");
-        log.error("");
-        throw new MojoExecutionException(terseMessage);
-    }
-
-    private void runMavenBuild(Reactor reactor) throws MojoExecutionException {
-        InvocationRequest request = new DefaultInvocationRequest();
-        request.setInteractive(false);
-
-        if (goals == null) {
-            goals = new ArrayList<String>();
-            goals.add("deploy");
-        }
-        if (skipTests) {
-            goals.add("-DskipTests=true");
-        }
-        request.setShowErrors(true);
-        request.setDebug(getLog().isDebugEnabled());
-        request.setGoals(goals);
-        List<String> profiles = profilesToActivate();
-        request.setProfiles(profiles);
-
-        request.setAlsoMake(true);
-        List<String> changedModules = new ArrayList<String>();
-        for (ReleasableModule releasableModule : reactor.getModulesInBuildOrder()) {
-            String modulePath = releasableModule.getRelativePathToModule();
-            boolean userExplicitlyWantsThisToBeReleased = modulesToRelease.contains(modulePath);
-            boolean userImplicitlyWantsThisToBeReleased = modulesToRelease == null || modulesToRelease.size() == 0;
-            if (userExplicitlyWantsThisToBeReleased || (userImplicitlyWantsThisToBeReleased && releasableModule.willBeReleased())) {
-                changedModules.add(modulePath);
-            }
-        }
-        request.setProjects(changedModules);
-
-        String profilesInfo = (profiles.size() == 0) ? "no profiles activated" : "profiles " + profiles;
-
-        getLog().info("About to run mvn " + goals + " with " + profilesInfo);
-
-        Invoker invoker = new DefaultInvoker();
-        try {
-            InvocationResult result = invoker.execute(request);
-            if (result.getExitCode() != 0) {
-                throw new MojoExecutionException("Maven execution returned code " + result.getExitCode());
-            }
-        } catch (MavenInvocationException e) {
-            throw new MojoExecutionException("Failed to build artifact", e);
-        }
-    }
-
-    private List<String> profilesToActivate() {
-        List<String> profiles = new ArrayList<String>();
-        if (releaseProfiles != null) {
-            for (String releaseProfile : releaseProfiles) {
-                profiles.add(releaseProfile);
-            }
-        }
-        for (Object activatedProfile : project.getActiveProfiles()) {
-            profiles.add(((org.apache.maven.model.Profile) activatedProfile).getId());
-        }
-        return profiles;
     }
 
 }

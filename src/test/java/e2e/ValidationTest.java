@@ -133,4 +133,19 @@ public class ValidationTest {
         assertThat(badOne.local, hasCleanWorkingDirectory());
     }
 
+    @Test
+    public void passForAllowedSnapshotDepencency() throws Exception {
+        // Install the snapshot dependency so that it can be built
+        TestProject dependency = TestProject.independentVersionsProject();
+        dependency.mvnRelease("1");
+
+        TestProject goodOne = TestProject.moduleWithAllowedSnapshotDependencies();
+
+        goodOne.mvnRelease("1");
+
+        assertThat(goodOne.local, hasCleanWorkingDirectory());
+        // TODO: Add more tests, e.g., to check if the release was build with dependency release
+    }
+
+
 }
