@@ -145,3 +145,14 @@ your plugin configuration:
 	</plugin>
 
 Note: Maven settings related to `known_hosts` will _not_ be considered by the plugin.
+    
+Resolve Snapshots
+-----------------
+If you depend on snapshot versions of other modules which are resolvable to a concrete version, you can enable that in
+the plugin configuration
+    
+	<configuration>
+        <resolveSnapshots>
+            <resolveSnapshot>com.github.danielflower.mavenplugins.testprojects.independentversions:core-utils:2.0-SNAPSHOT</resolveSnapshot>
+        </resolveSnapshots>
+    </configuration>

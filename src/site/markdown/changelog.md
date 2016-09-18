@@ -1,6 +1,10 @@
 Changelog
 ---------
 
+# 2.1.0
+
+* Enable snapshot dependencies where dependencies are managed by _releaser_ itself (or in a similar manner), cf. [#38](https://github.com/danielflower/multi-module-maven-release-plugin/issues/38)
+
 ### 2.0.4
 
 * The SCM details are no longer inherited from parent POMs.
